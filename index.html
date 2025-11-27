@@ -1,0 +1,690 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Battle Realms Prototype</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        body {
+            background-color: #1a202c;
+            color: #e2e8f0;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            overflow: hidden; /* Prevent scrolling on mobile */
+        }
+        #game-container {
+            position: relative;
+            width: 100vw;
+            height: 100vh;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+        }
+        canvas {
+            background-color: #2d3748;
+            border: 2px solid #4a5568;
+            box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.5);
+            max-width: 100%;
+            max-height: 70vh;
+        }
+        .ui-panel {
+            width: 100%;
+            max-width: 800px;
+            padding: 10px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            background: rgba(45, 55, 72, 0.95);
+            border-top: 1px solid #4a5568;
+        }
+        .action-btn {
+            background: #3182ce;
+            color: white;
+            border: none;
+            padding: 8px 16px;
+            border-radius: 4px;
+            cursor: pointer;
+            font-weight: bold;
+            transition: background 0.2s;
+            margin-right: 5px;
+        }
+        .action-btn:hover { background: #2b6cb0; }
+        .action-btn:disabled { background: #718096; cursor: not-allowed; opacity: 0.5; }
+        .action-btn.active { border: 2px solid #ecc94b; }
+        
+        /* Floating Text Animation */
+        .damage-text {
+            position: absolute;
+            font-weight: bold;
+            font-size: 20px;
+            pointer-events: none;
+            animation: floatUp 1s ease-out forwards;
+            text-shadow: 1px 1px 0 #000;
+        }
+        @keyframes floatUp {
+            0% { transform: translateY(0); opacity: 1; }
+            100% { transform: translateY(-30px); opacity: 0; }
+        }
+
+        /* Modal Styles */
+        .modal {
+            position: fixed;
+            top: 0; left: 0; right: 0; bottom: 0;
+            background: rgba(0,0,0,0.8);
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            z-index: 50;
+        }
+        .modal-content {
+            background: #2d3748;
+            padding: 2rem;
+            border-radius: 8px;
+            max-width: 500px;
+            border: 1px solid #4a5568;
+        }
+
+        /* Dev Console */
+        .dev-console {
+            position: absolute;
+            top: 10px;
+            right: 10px;
+            background: rgba(0,0,0,0.7);
+            padding: 10px;
+            border-radius: 4px;
+            font-size: 12px;
+            border: 1px solid #e53e3e;
+            z-index: 40;
+        }
+    </style>
+</head>
+<body>
+
+<div id="game-container">
+    <!-- Header -->
+    <div class="absolute top-0 left-0 p-4 w-full flex justify-between items-start pointer-events-none">
+        <div>
+            <h1 class="text-2xl font-bold text-yellow-400 drop-shadow-md">Battle Realms</h1>
+            <p class="text-xs text-gray-400">Prototype v0.1 - Exam Build</p>
+        </div>
+    </div>
+
+    <!-- Dev Console (Exam Scenario 1 & 3) -->
+    <div class="dev-console pointer-events-auto">
+        <h3 class="text-red-400 font-bold mb-2">DEV TOOLS (Exam Scenarios)</h3>
+        <label class="flex items-center space-x-2 mb-1 cursor-pointer">
+            <input type="checkbox" id="buggy-fireball" class="form-checkbox text-red-500">
+            <span>Simulate "Buggy Fireball" (Scenario 1)</span>
+        </label>
+        <label class="flex items-center space-x-2 cursor-pointer">
+            <input type="checkbox" id="balance-patch" checked class="form-checkbox text-green-500">
+            <span>Apply Balance Patch (Scenario 3)</span>
+        </label>
+    </div>
+
+    <!-- Game Canvas -->
+    <canvas id="gameCanvas"></canvas>
+
+    <!-- Bottom UI -->
+    <div class="ui-panel">
+        <div id="turn-indicator" class="text-lg font-bold text-blue-300">Player Turn</div>
+        <div id="action-bar" class="flex">
+            <!-- Dynamic Buttons -->
+        </div>
+        <div id="unit-stats" class="text-sm text-right text-gray-300">
+            Hover over a unit
+        </div>
+    </div>
+</div>
+
+<!-- Tutorial Modal (Scenario 2) -->
+<div id="tutorial-modal" class="modal">
+    <div class="modal-content">
+        <h2 class="text-2xl font-bold text-yellow-400 mb-4">Commander, Listen Up!</h2>
+        <div id="tutorial-step-1">
+            <p class="mb-4">Welcome to the <strong>Battle Realms</strong> prototype.</p>
+            <p class="mb-4">Your goal is to defeat the enemy team using your squad's unique abilities.</p>
+            <ul class="list-disc list-inside mb-4 text-gray-300 space-y-2">
+                <li><span class="text-blue-400 font-bold">Warrior (Blue):</span> High HP, strong melee attack.</li>
+                <li><span class="text-green-400 font-bold">Ranger (Green):</span> Weak melee, but great range.</li>
+                <li><span class="text-purple-400 font-bold">Mage (Purple):</span> Uses <strong>Fireball</strong>. Careful, it might be buggy!</li>
+            </ul>
+            <button class="bg-blue-600 hover:bg-blue-500 text-white font-bold py-2 px-4 rounded w-full" onclick="nextTutorial()">Next: How to Play</button>
+        </div>
+        <div id="tutorial-step-2" style="display:none;">
+            <p class="mb-4"><strong>Controls:</strong></p>
+            <ol class="list-decimal list-inside mb-4 text-gray-300 space-y-2">
+                <li>Click a unit to select it.</li>
+                <li>Click a <strong>Blue Tile</strong> to move.</li>
+                <li>Click a <strong>Red Tile</strong> (enemy) to attack.</li>
+                <li>Use the button bar below to switch between Moving and Attacking.</li>
+            </ol>
+            <p class="text-xs text-yellow-500 mb-4"><em>Dev Note: Check the top-right console to toggle exam scenarios like the "Buggy Fireball".</em></p>
+            <button class="bg-green-600 hover:bg-green-500 text-white font-bold py-2 px-4 rounded w-full" onclick="startGame()">Start Battle</button>
+        </div>
+    </div>
+</div>
+
+<script>
+/**
+ * BATTLE REALMS PROTOTYPE
+ * Core logic for the exam scenario.
+ */
+
+// --- Configuration ---
+const TILE_SIZE = 64;
+const ROWS = 6;
+const COLS = 8;
+const ANIMATION_SPEED = 200;
+
+// Colors
+const COLORS = {
+    grid: '#2d3748',
+    gridLine: '#4a5568',
+    highlightMove: 'rgba(66, 153, 225, 0.4)',
+    highlightAttack: 'rgba(245, 101, 101, 0.4)',
+    highlightSelect: 'rgba(236, 201, 75, 0.5)',
+    player: {
+        Warrior: '#4299e1',
+        Ranger: '#48bb78',
+        Mage: '#9f7aea'
+    },
+    enemy: {
+        Goblin: '#ed8936',
+        Orc: '#e53e3e',
+        Boss: '#742a2a'
+    }
+};
+
+// --- Game State ---
+const canvas = document.getElementById('gameCanvas');
+const ctx = canvas.getContext('2d');
+const uiStats = document.getElementById('unit-stats');
+const uiActionBar = document.getElementById('action-bar');
+const uiTurn = document.getElementById('turn-indicator');
+const chkBuggyFireball = document.getElementById('buggy-fireball');
+const chkBalancePatch = document.getElementById('balance-patch');
+
+let units = [];
+let selectedUnit = null;
+let currentTurn = 'player'; // 'player' or 'enemy'
+let isAnimating = false;
+let actionState = 'none'; // 'move', 'attack', 'skill'
+
+// --- Classes ---
+
+class Unit {
+    constructor(id, type, team, r, c) {
+        this.id = id;
+        this.type = type;
+        this.team = team; // 'player' or 'enemy'
+        this.r = r;
+        this.c = c;
+        this.hasMoved = false;
+        this.hasActed = false;
+        this.isDead = false;
+
+        // Base Stats
+        this.stats = this.getStatsByType(type);
+        this.hp = this.stats.maxHp;
+    }
+
+    getStatsByType(type) {
+        const stats = {
+            // Player Units
+            'Warrior': { maxHp: 100, atk: 25, range: 1, move: 3, icon: '⚔️' },
+            'Ranger': { maxHp: 60, atk: 20, range: 3, move: 4, icon: '🏹' },
+            'Mage': { maxHp: 50, atk: 15, range: 2, move: 3, icon: '🔮' }, // Low base atk, high skill dmg
+            
+            // Enemy Units
+            'Goblin': { maxHp: 40, atk: 15, range: 1, move: 4, icon: '👺' },
+            'Orc': { maxHp: 120, atk: 30, range: 1, move: 2, icon: '👹' },
+            'Boss': { maxHp: 200, atk: 40, range: 2, move: 2, icon: '👿' } 
+        };
+        return stats[type];
+    }
+
+    // Dynamic stat retrieval for balancing (Scenario 3)
+    getMaxHp() {
+        if (this.team === 'enemy' && !chkBalancePatch.checked) {
+            // Unbalanced: Enemies have 50% more HP
+            return Math.floor(this.stats.maxHp * 1.5);
+        }
+        return this.stats.maxHp;
+    }
+
+    draw(ctx) {
+        if (this.isDead) return;
+
+        const x = this.c * TILE_SIZE;
+        const y = this.r * TILE_SIZE;
+        const color = this.team === 'player' ? COLORS.player[this.type] : COLORS.enemy[this.type];
+
+        // Body
+        ctx.fillStyle = color;
+        ctx.beginPath();
+        ctx.arc(x + TILE_SIZE/2, y + TILE_SIZE/2, TILE_SIZE/3, 0, Math.PI*2);
+        ctx.fill();
+
+        // Border (Active/Moved)
+        if (this.hasActed && this.hasMoved) {
+            ctx.strokeStyle = '#718096'; // Greyed out
+            ctx.lineWidth = 2;
+        } else {
+            ctx.strokeStyle = '#fff';
+            ctx.lineWidth = 3;
+        }
+        ctx.stroke();
+
+        // Icon
+        ctx.font = '20px Arial';
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.fillStyle = '#fff';
+        ctx.fillText(this.stats.icon, x + TILE_SIZE/2, y + TILE_SIZE/2);
+
+        // HP Bar
+        const hpPct = this.hp / this.getMaxHp();
+        ctx.fillStyle = 'red';
+        ctx.fillRect(x + 5, y + 5, TILE_SIZE - 10, 4);
+        ctx.fillStyle = '#48bb78';
+        ctx.fillRect(x + 5, y + 5, (TILE_SIZE - 10) * hpPct, 4);
+    }
+}
+
+// --- Initialization ---
+
+function initGame() {
+    canvas.width = COLS * TILE_SIZE;
+    canvas.height = ROWS * TILE_SIZE;
+    
+    // Create Squads
+    units = [
+        new Unit(1, 'Warrior', 'player', 2, 1),
+        new Unit(2, 'Ranger', 'player', 1, 0),
+        new Unit(3, 'Mage', 'player', 3, 0),
+
+        new Unit(4, 'Goblin', 'enemy', 1, 6),
+        new Unit(5, 'Orc', 'enemy', 3, 5),
+        new Unit(6, 'Boss', 'enemy', 2, 7)
+    ];
+
+    draw();
+}
+
+// --- Core Loop & Input ---
+
+function draw() {
+    // Clear
+    ctx.fillStyle = COLORS.grid;
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+    // Grid Lines
+    ctx.strokeStyle = COLORS.gridLine;
+    ctx.lineWidth = 1;
+    for (let r = 0; r <= ROWS; r++) {
+        ctx.beginPath(); ctx.moveTo(0, r*TILE_SIZE); ctx.lineTo(canvas.width, r*TILE_SIZE); ctx.stroke();
+    }
+    for (let c = 0; c <= COLS; c++) {
+        ctx.beginPath(); ctx.moveTo(c*TILE_SIZE, 0); ctx.lineTo(c*TILE_SIZE, canvas.height); ctx.stroke();
+    }
+
+    // Highlights
+    if (selectedUnit && !selectedUnit.isDead) {
+        // Selection Ring
+        highlightTile(selectedUnit.r, selectedUnit.c, COLORS.highlightSelect);
+
+        // Move Range
+        if (actionState === 'move') {
+            const range = selectedUnit.stats.move;
+            highlightRange(selectedUnit.r, selectedUnit.c, range, COLORS.highlightMove);
+        }
+        // Attack/Skill Range
+        else if (actionState === 'attack' || actionState === 'skill') {
+            const range = actionState === 'skill' ? 4 : selectedUnit.stats.range; // Fireball has long range
+            highlightRange(selectedUnit.r, selectedUnit.c, range, COLORS.highlightAttack);
+        }
+    }
+
+    // Units
+    units.forEach(u => u.draw(ctx));
+}
+
+function highlightTile(r, c, color) {
+    ctx.fillStyle = color;
+    ctx.fillRect(c * TILE_SIZE + 1, r * TILE_SIZE + 1, TILE_SIZE - 2, TILE_SIZE - 2);
+}
+
+function highlightRange(startR, startC, range, color) {
+    for (let r = 0; r < ROWS; r++) {
+        for (let c = 0; c < COLS; c++) {
+            const dist = Math.abs(r - startR) + Math.abs(c - startC);
+            if (dist <= range && dist > 0) {
+                // Highlight if empty (for move) or occupied (for attack) depending on mode
+                // Simplified: just highlight the radius
+                ctx.fillStyle = color;
+                ctx.fillRect(c * TILE_SIZE + 1, r * TILE_SIZE + 1, TILE_SIZE - 2, TILE_SIZE - 2);
+            }
+        }
+    }
+}
+
+// --- Interaction ---
+
+canvas.addEventListener('click', (e) => {
+    if (isAnimating || currentTurn !== 'player') return;
+
+    const rect = canvas.getBoundingClientRect();
+    const c = Math.floor((e.clientX - rect.left) / TILE_SIZE);
+    const r = Math.floor((e.clientY - rect.top) / TILE_SIZE);
+
+    handleTileClick(r, c);
+});
+
+function handleTileClick(r, c) {
+    const clickedUnit = getUnitAt(r, c);
+
+    // 1. Select Unit
+    if (clickedUnit && clickedUnit.team === 'player' && !clickedUnit.hasActed) {
+        selectedUnit = clickedUnit;
+        actionState = 'move'; // Default to move
+        updateUI();
+        draw();
+        return;
+    }
+
+    if (!selectedUnit) return;
+
+    // 2. Perform Action
+    const dist = Math.abs(r - selectedUnit.r) + Math.abs(c - selectedUnit.c);
+
+    if (actionState === 'move') {
+        // Move Logic
+        if (!clickedUnit && dist <= selectedUnit.stats.move) {
+            moveUnit(selectedUnit, r, c);
+        }
+    } else if (actionState === 'attack') {
+        // Attack Logic
+        if (clickedUnit && clickedUnit.team === 'enemy' && dist <= selectedUnit.stats.range) {
+            attackUnit(selectedUnit, clickedUnit);
+        }
+    } else if (actionState === 'skill') {
+        // Skill Logic (Fireball)
+        if (clickedUnit && clickedUnit.team === 'enemy' && dist <= 4) { // Skill range
+            castFireball(selectedUnit, clickedUnit);
+        }
+    }
+}
+
+// --- Game Actions ---
+
+function moveUnit(unit, r, c) {
+    isAnimating = true;
+    unit.r = r;
+    unit.c = c;
+    unit.hasMoved = true;
+    actionState = 'attack'; // Auto switch to attack after move
+    
+    draw();
+    isAnimating = false;
+    updateUI();
+}
+
+function attackUnit(attacker, target) {
+    isAnimating = true;
+    // Standard Damage Formula
+    let damage = Math.max(1, attacker.stats.atk); 
+
+    // Balance Scenario: Apply randomness? No, standard attacks are stable.
+    applyDamage(target, damage);
+
+    attacker.hasActed = true;
+    attacker.hasMoved = true;
+    selectedUnit = null;
+    actionState = 'none';
+    
+    draw();
+    isAnimating = false;
+    checkEndTurn();
+    updateUI();
+}
+
+function castFireball(caster, target) {
+    isAnimating = true;
+    
+    // SCENARIO 1: INCONSISTENT ABILITIES
+    let damage = 0;
+    let isCrit = false;
+
+    if (chkBuggyFireball.checked) {
+        // Buggy Implementation: Random 0 to 60 damage
+        damage = Math.floor(Math.random() * 60); 
+        console.log("Buggy Fireball Damage:", damage);
+    } else {
+        // Balanced Implementation: Fixed 40 damage
+        damage = 40;
+    }
+
+    spawnFloatingText("FIREBALL!", target.r, target.c, 'orange');
+    
+    setTimeout(() => {
+        applyDamage(target, damage);
+        caster.hasActed = true;
+        caster.hasMoved = true;
+        selectedUnit = null;
+        actionState = 'none';
+        
+        draw();
+        isAnimating = false;
+        checkEndTurn();
+        updateUI();
+    }, 500);
+}
+
+function applyDamage(target, amount) {
+    target.hp -= amount;
+    spawnFloatingText(`-${amount}`, target.r, target.c, 'red');
+
+    if (target.hp <= 0) {
+        target.hp = 0;
+        target.isDead = true;
+        spawnFloatingText("DEAD", target.r, target.c, 'gray');
+    }
+    
+    // Check Win/Loss
+    const enemiesAlive = units.filter(u => u.team === 'enemy' && !u.isDead).length;
+    if (enemiesAlive === 0) {
+        alert("VICTORY! You have balanced the realms.");
+        location.reload();
+    }
+}
+
+function spawnFloatingText(text, r, c, color) {
+    const el = document.createElement('div');
+    el.className = 'damage-text';
+    el.innerText = text;
+    el.style.color = color;
+    
+    const rect = canvas.getBoundingClientRect();
+    el.style.left = (rect.left + c * TILE_SIZE + 10) + 'px';
+    el.style.top = (rect.top + r * TILE_SIZE) + 'px';
+    
+    document.body.appendChild(el);
+    setTimeout(() => el.remove(), 1000);
+}
+
+function getUnitAt(r, c) {
+    return units.find(u => u.r === r && u.c === c && !u.isDead);
+}
+
+// --- Turn Management ---
+
+function checkEndTurn() {
+    const playerUnits = units.filter(u => u.team === 'player' && !u.isDead);
+    if (playerUnits.every(u => u.hasActed)) {
+        endTurn();
+    }
+}
+
+function endTurn() {
+    selectedUnit = null;
+    actionState = 'none';
+    currentTurn = 'enemy';
+    uiTurn.innerText = "Enemy Turn...";
+    uiTurn.className = "text-lg font-bold text-red-400";
+    
+    units.forEach(u => {
+        if (u.team === 'player') { u.hasMoved = false; u.hasActed = false; }
+    });
+    
+    draw();
+    updateUI();
+
+    setTimeout(runEnemyAI, 1000);
+}
+
+function runEnemyAI() {
+    // Very simple AI: Find nearest player -> Move -> Attack
+    const enemies = units.filter(u => u.team === 'enemy' && !u.isDead);
+    const players = units.filter(u => u.team === 'player' && !u.isDead);
+
+    if (players.length === 0) {
+        alert("DEFEAT. The prototype has failed.");
+        location.reload();
+        return;
+    }
+
+    let delay = 0;
+
+    enemies.forEach(enemy => {
+        setTimeout(() => {
+            if (enemy.isDead) return;
+
+            // Find closest target
+            let target = null;
+            let minDist = 999;
+            players.forEach(p => {
+                const d = Math.abs(p.r - enemy.r) + Math.abs(p.c - enemy.c);
+                if (d < minDist && !p.isDead) {
+                    minDist = d;
+                    target = p;
+                }
+            });
+
+            if (target) {
+                // If in range, attack
+                if (minDist <= enemy.stats.range) {
+                    applyDamage(target, enemy.stats.atk);
+                } else {
+                    // Move closer (Simple logic: move 1 step towards r or c)
+                    let dr = Math.sign(target.r - enemy.r);
+                    let dc = Math.sign(target.c - enemy.c);
+                    
+                    // Simple collision check (only checks destination)
+                    if (!getUnitAt(enemy.r + dr, enemy.c)) {
+                        enemy.r += dr;
+                    } else if (!getUnitAt(enemy.r, enemy.c + dc)) {
+                        enemy.c += dc;
+                    }
+                }
+            }
+            draw();
+        }, delay);
+        delay += 800;
+    });
+
+    setTimeout(() => {
+        currentTurn = 'player';
+        uiTurn.innerText = "Player Turn";
+        uiTurn.className = "text-lg font-bold text-blue-300";
+        units.forEach(u => {
+             // Reset enemy flags if needed
+        });
+        draw();
+    }, delay + 500);
+}
+
+
+// --- UI Handling ---
+
+function updateUI() {
+    uiActionBar.innerHTML = '';
+
+    if (!selectedUnit) {
+        uiStats.innerText = "Select a unit to command.";
+        return;
+    }
+
+    // Stats
+    uiStats.innerText = `${selectedUnit.type} | HP: ${selectedUnit.hp}/${selectedUnit.getMaxHp()} | ATK: ${selectedUnit.stats.atk}`;
+
+    // Buttons
+    if (!selectedUnit.hasActed) {
+        // Move Btn
+        const btnMove = document.createElement('button');
+        btnMove.className = `action-btn ${actionState === 'move' ? 'active' : ''}`;
+        btnMove.innerText = "Move";
+        btnMove.onclick = () => { actionState = 'move'; draw(); updateUI(); };
+        uiActionBar.appendChild(btnMove);
+
+        // Attack Btn
+        const btnAtk = document.createElement('button');
+        btnAtk.className = `action-btn ${actionState === 'attack' ? 'active' : ''} bg-red-600 hover:bg-red-500`;
+        btnAtk.innerText = "Attack";
+        btnAtk.onclick = () => { actionState = 'attack'; draw(); updateUI(); };
+        uiActionBar.appendChild(btnAtk);
+
+        // Skill Btn (Mage only)
+        if (selectedUnit.type === 'Mage') {
+            const btnSkill = document.createElement('button');
+            btnSkill.className = `action-btn ${actionState === 'skill' ? 'active' : ''} bg-purple-600 hover:bg-purple-500`;
+            btnSkill.innerText = "Fireball";
+            btnSkill.onclick = () => { actionState = 'skill'; draw(); updateUI(); };
+            uiActionBar.appendChild(btnSkill);
+        }
+        
+        // Wait Btn
+        const btnWait = document.createElement('button');
+        btnWait.className = "action-btn bg-gray-600 hover:bg-gray-500";
+        btnWait.innerText = "Wait";
+        btnWait.onclick = () => { 
+            selectedUnit.hasActed = true; 
+            selectedUnit.hasMoved = true;
+            selectedUnit = null; 
+            draw(); 
+            updateUI(); 
+            checkEndTurn(); 
+        };
+        uiActionBar.appendChild(btnWait);
+    } else {
+        uiStats.innerText += " (Turn Ended)";
+    }
+}
+
+// --- Tutorial ---
+
+function nextTutorial() {
+    document.getElementById('tutorial-step-1').style.display = 'none';
+    document.getElementById('tutorial-step-2').style.display = 'block';
+}
+
+function startGame() {
+    document.getElementById('tutorial-modal').style.display = 'none';
+    // Re-init mainly to ensure stats respect initial checkbox state if user changed them
+    units.forEach(u => u.hp = u.getMaxHp()); 
+    draw();
+}
+
+// Start
+initGame();
+
+// Resize Handler
+window.addEventListener('resize', () => {
+   // Optional: Adjust canvas size on resize if needed
+   // draw();
+});
+
+</script>
+</body>
+</html>
